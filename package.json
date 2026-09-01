@@ -10,8 +10,8 @@
     "dev": "tsx watch src/index.ts"
   },
   "dependencies": {
-    "@celo/attribution-tags": "^0.1.0",
-    "viem": "^2.0.0"
+    "@celo/attribution-tags": "^0.3.0",
+    "viem": "^2.21.0"
   },
   "devDependencies": {
     "tsx": "^4.0.0",

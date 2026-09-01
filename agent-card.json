@@ -1,0 +1,14 @@
+{
+  "type": "https://eips.ethereum.org/EIPS/eip-8004#registration-v1",
+  "name": "ThothPay",
+  "description": "Pay-per-citation AI research terminal on Celo. Ask a question, watch the agent read the registered corpus, and see stablecoins land in creators' wallets the moment their work gets cited. Every citation pays its author.",
+  "image": "https://raw.githubusercontent.com/vickman787/thothpay/main/assets/thothpay-avatar.jpg",
+  "active": true,
+  "services": [
+    { "type": "https", "url": "https://thothpay.xyz/api/agent/research" },
+    { "type": "mcp", "url": "https://github.com/vickman787/thothpay" }
+  ],
+  "x402Support": true,
+  "registrations": [],
+  "supportedTrust": ["reputation"]
+}
