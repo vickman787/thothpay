@@ -1,20 +1,22 @@
 @import "tailwindcss";
 
-/* ── THE TERMINAL — phosphor-green command deck ─────────────────── */
+/* ── THOTHPAY — gold-on-ink "scribe's deck" ──────────────────────
+   Terminal rhythm, mystical palette: papyrus-ink blacks, gilded gold,
+   deep ember accents. */
 
 @theme {
-  --color-paper: #0C0E0A;          /* page background */
-  --color-panel: #161A11;          /* raised surfaces */
-  --color-panel-deep: #12150E;     /* inputs, wells */
-  --color-ink: #E8EDDA;            /* primary text */
-  --color-soft-ink: #9BA588;       /* secondary text */
-  --color-olive: #8B9478;          /* muted text, labels */
-  --color-faint: #5A6350;          /* faintest text */
-  --color-signal-green: #C6FF4D;   /* phosphor accent */
+  --color-paper: #0B0A07;          /* page background — warm ink */
+  --color-panel: #16130C;          /* raised surfaces */
+  --color-panel-deep: #120F09;     /* inputs, wells */
+  --color-ink: #EFE6CF;            /* primary text — warm parchment */
+  --color-soft-ink: #A99F87;       /* secondary text */
+  --color-olive: #7C7357;          /* muted text, labels */
+  --color-faint: #57503C;          /* faintest text */
+  --color-signal-green: #E8C468;   /* gilded gold accent */
   --color-amber: #FFB454;          /* scores, warnings */
-  --color-rust: #FF6B4A;           /* errors */
-  --color-border-subtle: rgba(232, 237, 218, 0.1);
-  --color-border-strong: rgba(232, 237, 218, 0.22);
+  --color-rust: #FF7A5C;           /* errors — ember */
+  --color-border-subtle: rgba(239, 230, 207, 0.1);
+  --color-border-strong: rgba(239, 230, 207, 0.22);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -24,7 +26,7 @@
 :root {
   --background: var(--color-paper);
   --foreground: var(--color-ink);
-  --green-glow: rgba(198, 255, 77, 0.14);
+  --green-glow: rgba(232, 196, 104, 0.14);
 }
 
 body {

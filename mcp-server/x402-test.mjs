@@ -1,23 +1,23 @@
 // Manual smoke test for the x402 payment flow against the live research
-// endpoint. Usage: CITEFLOW_PRIVATE_KEY=0x... node x402-test.mjs
+// endpoint. Usage: THOTHPAY_PRIVATE_KEY=0x... node x402-test.mjs
 import { GatewayClient } from '@circle-fin/x402-batching/client'
 
-const PRIVATE_KEY = process.env.CITEFLOW_PRIVATE_KEY
-const RESEARCH_URL = process.env.CITEFLOW_RESEARCH_URL || 'https://citeflowai.xyz/api/agent/research'
+const PRIVATE_KEY = process.env.THOTHPAY_PRIVATE_KEY || process.env.CITEFLOW_PRIVATE_KEY
+const RESEARCH_URL = process.env.THOTHPAY_RESEARCH_URL || 'https://thothpay.xyz/api/agent/research'
 const QUERY = process.argv[2] || 'What is x402 and why does it matter for AI agents?'
 
 if (!PRIVATE_KEY) {
-  console.error('Missing CITEFLOW_PRIVATE_KEY environment variable (a funded Arc Testnet wallet key).')
+  console.error('Missing THOTHPAY_PRIVATE_KEY environment variable (a funded Celo Mainnet wallet key).')
   process.exit(1)
 }
 
 const client = new GatewayClient({
-  chain: 'arcTestnet',
+  chain: 'celoMainnet',
   privateKey: PRIVATE_KEY,
-  rpcUrl: 'https://rpc.drpc.testnet.arc.network',
+  rpcUrl: 'https://forno.celo.org',
 })
 
-console.log('$ citeflow-x402-test')
+console.log('$ thothpay-x402-test')
 console.log(`buyer wallet: ${client.account?.address ?? '(derived from key)'}`)
 console.log(`endpoint:     ${RESEARCH_URL}`)
 console.log(`query:        "${QUERY}"`)
@@ -58,4 +58,4 @@ if (data.purchasedSources?.length) {
   console.log('(no sources cited on this run)')
 }
 console.log('')
-console.log('citeflow-x402-test: PASS')
+console.log('thothpay-x402-test: PASS')

@@ -1,3 +1,4 @@
+import { NextRequest, NextResponse } from 'next/server'
 import { payCreatorUsdc, CELO_USDC } from './celo-treasury'
 
 // ThothPay runs on Celo mainnet. Creator payouts and budget refunds are
@@ -5,10 +6,9 @@ import { payCreatorUsdc, CELO_USDC } from './celo-treasury'
 // hackathon attribution tag (ERC-8021 data suffix) so the Value Moved
 // leaderboard credits the volume.
 //
-// This module keeps the original function name/signature (executeGatewayTransfer)
-// so the research agent and license route are unchanged, but the underlying
-// rail is now a direct on-chain Celo USDC transfer instead of Circle's
-// Developer-Controlled Wallets API.
+// Keeps the original executeGatewayTransfer name/signature so the research
+// agent and license route are unchanged, but the rail is now a direct Celo
+// USDC transfer from the treasury wallet instead of a custodial API.
 
 export async function executeGatewayTransfer(destinationAddress: string, amountUsdc: string): Promise<string> {
   const amount = parseFloat(amountUsdc)

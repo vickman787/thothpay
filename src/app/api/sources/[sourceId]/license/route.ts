@@ -95,10 +95,10 @@ export async function POST(
       return NextResponse.json({ error: 'Invalid or unknown payment authorization' }, { status: 400 })
     }
 
-    // 2. Execute the REAL Circle Web3 Services API!
+    // 2. Execute the Celo treasury payout (USDC transfer, attribution-tagged)
     let gatewaySettlementId: string
     try {
-      const { executeGatewayTransfer } = await import('@/lib/payments/circle-api')
+      const { executeGatewayTransfer } = await import('@/lib/payments/celo-payouts')
       
       // Calculate 20% platform fee
       const platformFeePercent = 0.20
@@ -109,8 +109,8 @@ export async function POST(
       
       gatewaySettlementId = await executeGatewayTransfer(recipientWallet, creatorPayout)
     } catch (apiError: any) {
-      console.error('Circle API Execution Failed:', apiError)
-      return NextResponse.json({ error: apiError.message || 'Payment execution failed at Gateway' }, { status: 500 })
+      console.error('Treasury Payout Execution Failed:', apiError)
+      return NextResponse.json({ error: apiError.message || 'Payment execution failed at treasury' }, { status: 500 })
     }
 
     const { error: settlementError } = await supabase

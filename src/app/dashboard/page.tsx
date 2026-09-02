@@ -79,7 +79,7 @@ export default async function DashboardPage() {
         </div>
         <h1 className="text-3xl font-serif font-bold text-[var(--color-ink)] mb-4">Dashboard Locked</h1>
         <p className="text-lg text-[var(--color-soft-ink)] max-w-md mx-auto mb-8">
-          Please connect your Circle Wallet using the button in the top navigation bar to view your creator dashboard and track your Celo Mainnet earnings.
+          Please connect your EVM wallet using the button in the top navigation bar to view your creator dashboard and track your Celo Mainnet earnings.
         </p>
       </div>
     )

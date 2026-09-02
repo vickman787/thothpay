@@ -57,7 +57,6 @@ export default async function LandingPage() {
           <p className="text-base md:text-lg font-sans text-[var(--color-soft-ink)] mb-9 leading-relaxed">
             Ask a question, watch the agent read the registered corpus, and see USDC land in creators&apos; wallets the moment their work gets cited. No subscriptions, no scraping — just receipts.
           </p>
-
           <div className="flex flex-col sm:flex-row gap-4">
             <Link
               href="/research"

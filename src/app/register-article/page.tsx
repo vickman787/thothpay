@@ -13,7 +13,7 @@ export default function RegisterArticlePage() {
   const router = useRouter()
 
   useEffect(() => {
-    const syncWallet = () => setWalletAddress(localStorage.getItem('circle_wallet_address'))
+    const syncWallet = () => setWalletAddress(localStorage.getItem('thothpay_wallet_address'))
     syncWallet()
     window.addEventListener('storage', syncWallet)
     window.addEventListener('wallet_changed', syncWallet)

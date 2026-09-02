@@ -1,6 +1,6 @@
 import { createAdminClient } from '@/utils/supabase/admin'
 import { authorizePayment } from '../payments/treasury'
-import { executeGatewayTransfer } from '../payments/circle-api'
+import { executeGatewayTransfer } from '../payments/celo-payouts'
 import { embedQuery, cosineSimilarity, parseVector } from './embeddings'
 import { z } from 'zod'
 

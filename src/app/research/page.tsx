@@ -1,8 +1,14 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { Copy, LogOut, Check, Trash2 } from 'lucide-react'
-import { W3SSdk } from '@circle-fin/w3s-pw-web-sdk'
+import { useState, useEffect, useCallback } from 'react'
+import { Trash2 } from 'lucide-react'
+import { useAccount, useWriteContract } from 'wagmi'
+import { parseAbi } from 'viem'
+import { CELO_USDC, TREASURY_ADDRESS, usdcToAtomic } from '@/lib/celo'
+
+const ERC20_ABI = parseAbi([
+  'function transfer(address to, uint256 amount) returns (bool)',
+])
 
 export default function ResearchWorkspacePage() {
   const [query, setQuery] = useState('')
@@ -11,96 +17,41 @@ export default function ResearchWorkspacePage() {
   const [progressLog, setProgressLog] = useState<string[]>([])
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
-  const [walletAddress, setWalletAddress] = useState<string | null>(null)
-  const [walletBalance, setWalletBalance] = useState<string | null>(null)
-  const [userToken, setUserToken] = useState<string | null>(null)
-  const [encryptionKey, setEncryptionKey] = useState<string | null>(null)
-  const [isCopied, setIsCopied] = useState(false)
-  const [sdk, setSdk] = useState<W3SSdk | null>(null)
 
   interface HistoryItem {
     id?: string;
     query: string;
     timestamp: string;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     result: any;
   }
   const [history, setHistory] = useState<HistoryItem[]>([])
 
-  // Load from localStorage on mount
+  const { address, isConnected } = useAccount()
+  const { writeContractAsync } = useWriteContract()
+
+  // Use the wagmi-connected address, falling back to localStorage for
+  // cross-tab/refresh consistency with the nav bar.
+  const [localAddr, setLocalAddr] = useState<string | null>(null)
+  const effectiveAddress = isConnected && address ? address : localAddr
+
   useEffect(() => {
-    const savedAddress = localStorage.getItem('circle_wallet_address')
-    const savedToken = localStorage.getItem('circle_user_token')
-    const savedEncKey = localStorage.getItem('circle_encryption_key')
-
-    if (savedAddress) setWalletAddress(savedAddress)
-    if (savedToken) setUserToken(savedToken)
-    if (savedEncKey) setEncryptionKey(savedEncKey)
-
-    if (savedToken) {
-      fetch('/api/circle/wallet', {
-        headers: { 'Authorization': `Bearer ${savedToken}` }
-      })
-      .then(res => {
-        if (res.ok) return res.json()
-        if (res.status === 401) {
-          // Circle userToken expired — clear the stale local session
-          handleLogout()
-        }
-        return null
-      })
-      .then(data => {
-        if (data?.balance) setWalletBalance(data.balance)
-      })
-      .catch(e => console.warn('Wallet balance fetch failed:', e))
-
+    const sync = () => setLocalAddr(localStorage.getItem('thothpay_wallet_address'))
+    sync()
+    window.addEventListener('storage', sync)
+    window.addEventListener('wallet_changed', sync)
+    if (effectiveAddress) {
       fetch('/api/research/history')
-        .then(res => res.ok ? res.json() : null)
-        .then(data => {
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
           if (data?.history) setHistory(data.history)
         })
-        .catch(e => console.warn('History fetch failed:', e))
+        .catch((e) => console.warn('History fetch failed:', e))
     }
-
-    if (!sdk) {
-      const circleSdk = new W3SSdk({
-        appSettings: { appId: process.env.NEXT_PUBLIC_CIRCLE_APP_ID as string }
-      })
-      setSdk(circleSdk)
+    return () => {
+      window.removeEventListener('storage', sync)
+      window.removeEventListener('wallet_changed', sync)
     }
-  }, [sdk])
-
-  const handleCopy = () => {
-    if (walletAddress) {
-      if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(walletAddress)
-      } else {
-        const textArea = document.createElement("textarea")
-        textArea.value = walletAddress
-        document.body.appendChild(textArea)
-        textArea.select()
-        try {
-          document.execCommand('copy')
-        } catch (err) {
-          console.error('Copy failed', err)
-        }
-        document.body.removeChild(textArea)
-      }
-      setIsCopied(true)
-      setTimeout(() => setIsCopied(false), 2000)
-    }
-  }
-
-  const handleLogout = () => {
-    setWalletAddress(null)
-    setWalletBalance(null)
-    setUserToken(null)
-    setEncryptionKey(null)
-    localStorage.removeItem('circle_wallet_address')
-    localStorage.removeItem('circle_user_token')
-    localStorage.removeItem('circle_encryption_key')
-    window.dispatchEvent(new Event('wallet_changed'))
-  }
+  }, [effectiveAddress])
 
   const handleDeleteHistory = async (id: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -114,83 +65,39 @@ export default function ResearchWorkspacePage() {
     }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
+  // Sends USDC from the user's own wallet to the treasury, then runs research.
+  const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
+    if (!effectiveAddress) {
+      setError('Connect a wallet to continue.')
+      return
+    }
     setLoading(true)
     setError(null)
     setResult(null)
     setProgressLog([])
 
     try {
-      if (!userToken || !walletAddress || !encryptionKey || !sdk) {
-        throw new Error('Wallet not fully connected. Please disconnect and reconnect.');
-      }
+      const budget = parseFloat(maxBudget)
+      if (!Number.isFinite(budget) || budget <= 0) throw new Error('Enter a valid budget')
 
-      setProgressLog(prev => [...prev, 'Initiating Pay-Per-Prompt transfer...'])
-      
-      const paymentRes = await fetch('/api/circle/payment/create', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userToken, walletAddress: walletAddress, amount: maxBudget })
+      setProgressLog(prev => [...prev, `Requesting transfer of $${budget.toFixed(2)} USDC to the treasury…`])
+
+      const txHash = await writeContractAsync({
+        address: CELO_USDC,
+        abi: ERC20_ABI,
+        functionName: 'transfer',
+        args: [TREASURY_ADDRESS, usdcToAtomic(budget)],
       })
 
-      if (!paymentRes.ok) {
-        const errText = await paymentRes.text()
-        let parsedErrMsg = errText;
-        try {
-          parsedErrMsg = JSON.parse(errText).error || errText;
-        } catch {}
-        
-        if (parsedErrMsg.includes("Wallet not found")) {
-          handleLogout();
-          throw new Error("Your wallet session expired or was reset. Please click 'Connect Wallet' to reconnect.");
-        }
-        throw new Error(parsedErrMsg || 'Payment challenge failed');
-      }
+      if (!txHash) throw new Error('No transaction hash returned from wallet')
 
-      const { challengeId } = await paymentRes.json()
-
-      setProgressLog(prev => [...prev, 'Awaiting PIN authorization for upfront payment...'])
-
-      // Promisify the SDK execution
-      await new Promise<void>((resolve, reject) => {
-        let settled = false
-        // Our own overall deadline — generous, since the user may take a while to enter their PIN
-        const deadline = setTimeout(() => {
-          if (!settled) {
-            settled = true
-            reject(new Error('Payment authorization timed out. Please try again.'))
-          }
-        }, 5 * 60 * 1000)
-
-        sdk.setAuthentication({ userToken, encryptionKey })
-        sdk.execute(challengeId, (err, result) => {
-          if (settled) return
-          if (err) {
-            // The SDK fires a spurious "Network error" (155706) 10s after launch if its
-            // secure iframe is slow to load. The challenge is still live and the PIN
-            // prompt will still appear, so keep waiting instead of aborting.
-            if ((err as { code?: number }).code === 155706) {
-              setProgressLog(prev => [...prev, 'Secure payment window is taking longer than usual to load...'])
-              return
-            }
-            settled = true
-            clearTimeout(deadline)
-            reject(new Error(err.message || 'Payment authorization failed'))
-          } else {
-            settled = true
-            clearTimeout(deadline)
-            resolve()
-          }
-        })
-      })
-
-      setProgressLog(prev => [...prev, 'Payment authorized successfully!', 'Booting Agent 1...'])
+      setProgressLog(prev => [...prev, `Payment sent. Waiting for confirmation… (${String(txHash).slice(0, 10)}…)`, 'Booting the agent…'])
 
       const res = await fetch('/api/research', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query, maxBudget: parseFloat(maxBudget), challengeId, userToken })
+        body: JSON.stringify({ query, maxBudget: budget, txHash }),
       })
 
       if (!res.ok) {
@@ -213,7 +120,7 @@ export default function ResearchWorkspacePage() {
         if (done) break
 
         buffer += decoder.decode(value, { stream: true })
-        
+
         const lines = buffer.split('\n')
         buffer = lines.pop() || ''
 
@@ -226,14 +133,11 @@ export default function ResearchWorkspacePage() {
             } else if (data.type === 'done') {
               const finalResult = data.payload.result;
               setResult(finalResult)
-              setHistory(prev => {
-                const newHistory = [{
-                  query: query,
-                  timestamp: new Date().toISOString(),
-                  result: finalResult
-                }, ...prev].slice(0, 20);
-                return newHistory;
-              });
+              setHistory(prev => [{
+                query,
+                timestamp: new Date().toISOString(),
+                result: finalResult
+              }, ...prev].slice(0, 20));
             } else if (data.type === 'error') {
               setError(data.payload)
             }
@@ -243,13 +147,12 @@ export default function ResearchWorkspacePage() {
         }
       }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     } catch (err: any) {
       setError(err.message)
     } finally {
       setLoading(false)
     }
-  }
+  }, [effectiveAddress, maxBudget, query])
 
   return (
     <div className="flex-1 flex flex-col pt-12 pb-24 content-container max-w-[1100px] mx-auto">
@@ -296,13 +199,13 @@ export default function ResearchWorkspacePage() {
           </div>
           <button
             type="submit"
-            disabled={loading || !walletAddress}
+            disabled={loading || !effectiveAddress}
             className="font-mono font-bold text-sm bg-[var(--color-signal-green)] text-[var(--color-paper)] px-8 py-4 md:py-0 disabled:opacity-40 disabled:cursor-not-allowed hover:brightness-110 transition-all cursor-pointer"
           >
             {loading ? 'RUNNING…' : 'EXECUTE'}
           </button>
         </div>
-        {!walletAddress && (
+        {!effectiveAddress && (
           <div className="mt-3 font-mono text-xs text-[var(--color-amber)]">
             ⚠ wallet not connected — connect to execute queries
           </div>
@@ -340,8 +243,6 @@ export default function ResearchWorkspacePage() {
         </div>
       )}
 
-
-
       {error && (
         <div className="mb-8 p-4 border border-[var(--color-rust)] text-[var(--color-rust)] bg-[var(--color-rust)]/10 font-mono text-sm rounded-[2px]">
           ✗ ERROR: {error}
@@ -358,7 +259,7 @@ export default function ResearchWorkspacePage() {
           </div>
           <div className="p-4 space-y-2.5 max-h-72 overflow-y-auto text-[0.8rem] leading-relaxed">
             {progressLog.map((log, index) => {
-              const isSettle = /settled|refunded|authorized successfully/i.test(log)
+              const isSettle = /settled|refunded|authorized successfully|confirmed/i.test(log)
               const isFail = /failed|warning|error/i.test(log)
               return (
                 <div key={index} className="flex gap-4">
@@ -392,13 +293,12 @@ export default function ResearchWorkspacePage() {
           <section className="card-panel">
             <div className="panel-h">
               financial ledger
-              <span className="ml-auto text-[var(--color-faint)]">arc testnet · usdc</span>
+              <span className="ml-auto text-[var(--color-faint)]">celo mainnet · usdc</span>
             </div>
             <div>
               {result.purchasedSources.length === 0 ? (
                 <p className="font-mono text-sm text-[var(--color-soft-ink)] p-6">No paid sources were required for this answer. Full budget refunded.</p>
               ) : (
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 result.purchasedSources.map((source: any, i: number) => (
                   <div key={i} className="border-b border-[var(--color-border-subtle)] last:border-0 p-5 font-mono text-sm flex flex-col md:flex-row gap-4 justify-between items-start md:items-center">
                     <div className="min-w-0">
@@ -408,10 +308,10 @@ export default function ResearchWorkspacePage() {
                     <div className="text-left md:text-right flex-shrink-0">
                       <div className="mb-2"><span className="tag">SETTLED ✓</span></div>
                       <div className="text-xs text-[var(--color-soft-ink)] break-all max-w-xs mb-1">
-                        <span className="text-[var(--color-faint)]">auth</span> {source.receipt?.payload?.split(':')[1] || 'unknown'}
+                        <span className="text-[var(--color-faint)]">tx</span> {source.receipt?.payload?.split(':')[1] || 'unknown'}
                       </div>
                       <div className="text-xs text-[var(--color-soft-ink)] break-all max-w-xs">
-                        <span className="text-[var(--color-faint)]">batch</span> {source.receipt?.gatewaySettlementId || 'unknown'}
+                        <span className="text-[var(--color-faint)]">gateway</span> {source.receipt?.gatewaySettlementId || 'unknown'}
                       </div>
                     </div>
                   </div>

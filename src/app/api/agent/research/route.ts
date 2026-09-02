@@ -5,27 +5,20 @@ import { createAdminClient } from '@/utils/supabase/admin'
 import { runResearchAgent } from '@/lib/ai/research-agent'
 
 // Agent-payable research endpoint. Any x402 client — human or autonomous —
-// can pay $1.00 in USDC via a gasless signed authorization (no Circle
-// wallet UI, no PIN, no browser session) and get a grounded, cited answer,
-// with any unspent portion refunded to the paying wallet.
+// can pay $1.00 in USDC via a gasless signed authorization and get a
+// grounded, cited answer, with any unspent portion refunded to the payer.
 //
-// This is deliberately separate from /api/research, which is untouched and
-// keeps serving the human flow (Circle wallet-UI PIN payment + Supabase
-// session). The two payment rails don't share funds or identity:
+// This is deliberately separate from /api/research, which keeps serving the
+// human flow (user pays the treasury from their own EVM wallet, verified
+// on-chain). The two payment rails don't share identity:
 //
-//   - /api/research pays into the treasury via a Circle Developer-Controlled
-//     Wallet transfer, verified by inspecting that transaction directly.
-//   - This route pays via Circle Gateway's batched x402 settlement, which
-//     lands on-chain later (in a periodic batch), not immediately.
+//   - /api/research verifies an on-chain USDC transfer to the treasury from
+//     the user's wallet before running.
+//   - This route pays via the x402 facilitator, which settles on-chain in a
+//     periodic batch.
 //
-// Both refund unspent budget through the same executeGatewayTransfer
-// mechanism (Circle Developer-Controlled Wallets), which sends from the
-// treasury's own on-chain balance — a separate pool from whatever this
-// specific x402 payment settles into. On testnet that pool has ample slack
-// from prior payments, so refunds succeed in practice; this is a real
-// architectural gap worth closing before relying on this in production,
-// since it isn't guaranteed the treasury will always have settled balance
-// on hand the instant an agent-paid session needs to refund.
+// Both refund unspent budget through the treasury wallet's own on-chain
+// balance.
 export async function GET(request: NextRequest) {
   const server = await getX402Server()
   const context = await buildRequestContext(request, '/api/agent/research')

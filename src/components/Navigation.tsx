@@ -3,17 +3,17 @@
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useState, useEffect, useRef } from "react";
-import { Menu, X, LogIn, LogOut, Copy, Check, Droplet, Send, ChevronDown } from "lucide-react";
-import { createClient } from "@/utils/supabase/client";
-import SendModal from "./SendModal";
-import WalletModal from "./WalletModal";
+import { Menu, X, LogIn, LogOut, Copy, Check, ChevronDown } from "lucide-react";
+import { useAccount, useDisconnect } from "wagmi";
+import ConnectWalletModal from "./ConnectWalletModal";
 
 function LogoMark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
-      <rect width="512" height="512" rx="118" fill="#C6FF4D" />
-      <path d="M133,172 h96 v72 h-48 v32 h48 v64 h-96 z" fill="#0C0E0A" />
-      <path d="M283,172 h96 v72 h-48 v32 h48 v64 h-96 z" fill="#0C0E0A" />
+      <rect width="512" height="512" rx="118" fill="#E8C468" />
+      <path d="M210,170 h92 v76 h-44 v38 h44 v58 h-92 z" fill="#0C0E0A" />
+      <path d="M310,170 h92 v76 h-44 v38 h44 v58 h-92 z" fill="#0C0E0A" />
+      <circle cx="150" cy="150" r="14" fill="#0C0E0A" />
     </svg>
   );
 }
@@ -24,13 +24,14 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletBalance, setWalletBalance] = useState<string | null>(null);
   const [isCopied, setIsCopied] = useState(false);
-  const [isSendModalOpen, setIsSendModalOpen] = useState(false);
   const [isWalletModalOpen, setIsWalletModalOpen] = useState(false);
   const [isWalletMenuOpen, setIsWalletMenuOpen] = useState(false);
   const walletMenuRef = useRef<HTMLDivElement>(null);
   const pathname = usePathname();
   const router = useRouter();
-  const supabase = createClient();
+
+  const { address, isConnected } = useAccount();
+  const { disconnect } = useDisconnect();
 
   // Close the wallet dropdown on outside click or Escape
   useEffect(() => {
@@ -51,100 +52,50 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
     };
   }, [isWalletMenuOpen]);
 
-  // Sync prop changes from layout
+  // Derive the connected address from wagmi state, with localStorage as the
+  // cross-tab/refresh source of truth.
+  const effectiveAddress = isConnected && address ? address : walletAddress;
+
   useEffect(() => {
+    setWalletAddress(localStorage.getItem('thothpay_wallet_address'));
     setUser(initialUser || null);
-    
-    // Automatically restore backend session if frontend has a wallet token but backend has no user
-    const token = localStorage.getItem('circle_user_token');
-    if (!initialUser && token) {
-      fetch('/api/circle/wallet-login', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userToken: token }),
-      })
-      .then(res => {
-        if (res.ok) {
-          // Re-fetch the server-rendered user context (cookies now set) without
-          // a hard reload — avoids the full-page flash/flicker on reconnect.
-          router.refresh();
-        } else {
-          // Token is invalid/expired, log out locally
-          localStorage.removeItem('circle_wallet_address');
-          localStorage.removeItem('circle_user_token');
-          localStorage.removeItem('circle_encryption_key');
-          window.dispatchEvent(new Event('wallet_changed'));
-        }
-      })
-      .catch(console.error);
-    }
-  }, [initialUser, router]);
+  }, [initialUser, isConnected, address]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      setUser(session?.user ?? null);
-    });
-
-    const fetchBalance = async (token: string) => {
-      try {
-        const res = await fetch('/api/circle/wallet', {
-          headers: { 'Authorization': `Bearer ${token}` }
-        })
-        if (res.ok) {
-          const data = await res.json()
-          if (data.balance) setWalletBalance(data.balance)
-        } else if (res.status === 401) {
-          // Circle userToken expired (they live ~60 min) — drop the stale local session
-          handleWalletLogout()
-        }
-      } catch(e) {
-        console.warn('Wallet balance fetch failed:', e)
-      }
+    if (!effectiveAddress) {
+      setWalletBalance(null);
+      return;
     }
+    let cancelled = false;
+    fetch(`/api/wallet/balance?address=${effectiveAddress}`)
+      .then((res) => (res.ok ? res.json() : null))
+      .then((data) => {
+        if (!cancelled && data?.balance) setWalletBalance(data.balance);
+      })
+      .catch((e) => console.warn('Wallet balance fetch failed:', e));
+    return () => { cancelled = true; };
+  }, [effectiveAddress]);
 
-    const initWallet = () => {
-      setWalletAddress(localStorage.getItem('circle_wallet_address'));
-      const token = localStorage.getItem('circle_user_token');
-      if (token) fetchBalance(token); else setWalletBalance(null);
-    }
-
-    initWallet();
-    
-    const handleStorage = () => initWallet();
-    const handleCustom = () => initWallet();
-    
-    window.addEventListener('storage', handleStorage);
-    window.addEventListener('wallet_changed', handleCustom);
-
-    return () => {
-      subscription.unsubscribe();
-      window.removeEventListener('storage', handleStorage);
-      window.removeEventListener('wallet_changed', handleCustom);
-    };
-  }, [supabase]);
-
-  const handleLogout = async () => {
+  const handleLogout = () => {
     handleWalletLogout();
-    await supabase.auth.signOut();
+    disconnect?.();
     window.location.href = "/";
   };
 
   const handleWalletLogout = () => {
     setWalletAddress(null);
     setWalletBalance(null);
-    localStorage.removeItem('circle_wallet_address');
-    localStorage.removeItem('circle_user_token');
-    localStorage.removeItem('circle_encryption_key');
+    localStorage.removeItem('thothpay_wallet_address');
     window.dispatchEvent(new Event('wallet_changed'));
   };
 
   const handleCopy = () => {
-    if (walletAddress) {
+    if (effectiveAddress) {
       if (navigator.clipboard && window.isSecureContext) {
-        navigator.clipboard.writeText(walletAddress)
+        navigator.clipboard.writeText(effectiveAddress)
       } else {
         const textArea = document.createElement("textarea")
-        textArea.value = walletAddress
+        textArea.value = effectiveAddress
         document.body.appendChild(textArea)
         textArea.select()
         try {
@@ -201,7 +152,7 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
 
         {/* Wallet — pushed to the far right */}
         <div className="hidden md:flex items-center ml-auto flex-shrink-0">
-          {walletAddress ? (
+          {effectiveAddress ? (
             <div className="relative" ref={walletMenuRef}>
               <button
                 type="button"
@@ -211,7 +162,7 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
                 className="flex items-center gap-2.5 text-sm text-[var(--color-soft-ink)] font-mono bg-[var(--color-panel-deep)] px-3.5 py-2 border border-[var(--color-border-strong)] rounded-[2px] whitespace-nowrap cursor-pointer hover:border-[var(--color-signal-green)] transition-colors"
               >
                 <span className="glow-dot animate-pulse"></span>
-                <span>{walletAddress.substring(0, 4)}…{walletAddress.substring(walletAddress.length - 4)}</span>
+                <span>{effectiveAddress.substring(0, 4)}…{effectiveAddress.substring(effectiveAddress.length - 4)}</span>
                 {walletBalance && (
                   <>
                     <span className="text-[var(--color-faint)]">·</span>
@@ -228,7 +179,7 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
                 >
                   <div className="px-4 py-3 border-b border-[var(--color-border-subtle)]">
                     <div className="text-[0.6rem] uppercase tracking-[0.16em] text-[var(--color-faint)] mb-1">connected wallet</div>
-                    <div className="text-xs text-[var(--color-soft-ink)] break-all">{walletAddress}</div>
+                    <div className="text-xs text-[var(--color-soft-ink)] break-all">{effectiveAddress}</div>
                   </div>
                   <button
                     type="button"
@@ -239,25 +190,15 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
                     {isCopied ? <Check size={14} className="text-[var(--color-signal-green)]" /> : <Copy size={14} />}
                     {isCopied ? 'copied!' : 'copy address'}
                   </button>
-                  <button
-                    type="button"
-                    role="menuitem"
-                    onClick={() => { setIsWalletMenuOpen(false); setIsSendModalOpen(true); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--color-ink)] hover:bg-[var(--color-panel-deep)] hover:text-[var(--color-signal-green)] transition-colors text-left"
-                  >
-                    <Send size={14} />
-                    send usdc
-                  </button>
                   <a
                     role="menuitem"
-                    href="https://faucet.circle.com/"
+                    href={`https://celoscan.io/address/${effectiveAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={() => setIsWalletMenuOpen(false)}
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-[var(--color-ink)] hover:bg-[var(--color-panel-deep)] hover:text-[var(--color-signal-green)] transition-colors"
                   >
-                    <Droplet size={14} />
-                    faucet
+                    view on celoscan
                   </a>
                   <button
                     type="button"
@@ -305,7 +246,7 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
             </Link>
           ))}
           <div className="h-px w-full bg-[var(--color-border-subtle)] my-2"></div>
-          {!walletAddress && (
+          {!effectiveAddress && (
             <button
               onClick={() => {
                 setIsOpen(false);
@@ -318,7 +259,7 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
             </button>
           )}
 
-          {walletAddress && (
+          {effectiveAddress && (
             <>
               <div className="h-px w-full bg-[var(--color-border-subtle)] my-2"></div>
               <div className="flex flex-col gap-3 py-2">
@@ -327,7 +268,7 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
                   <div className="flex flex-col gap-1">
                     <div className="flex items-center gap-2 font-mono text-sm text-[var(--color-soft-ink)]">
                       <span className="glow-dot animate-pulse"></span>
-                      {walletAddress.substring(0, 6)}...{walletAddress.substring(walletAddress.length - 4)}
+                      {effectiveAddress.substring(0, 6)}...{effectiveAddress.substring(effectiveAddress.length - 4)}
                     </div>
                     {walletBalance && (
                       <div className="font-bold font-mono text-[var(--color-ink)]">${Number(walletBalance).toFixed(2)} USDC</div>
@@ -341,23 +282,6 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
                       title="Copy Address"
                     >
                       {isCopied ? <Check size={16} className="text-[var(--color-signal-green)]" /> : <Copy size={16} />}
-                    </button>
-                    <a
-                      href="https://faucet.circle.com/"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="p-2 hover:text-[var(--color-signal-green)] rounded transition-colors"
-                      title="Get USDC from Celo"
-                    >
-                      <Droplet size={16} />
-                    </a>
-                    <button
-                      type="button"
-                      onClick={() => setIsSendModalOpen(true)}
-                      className="p-2 hover:text-[var(--color-signal-green)] rounded transition-colors"
-                      title="Send USDC"
-                    >
-                      <Send size={16} />
                     </button>
                     <button
                       type="button"
@@ -378,30 +302,13 @@ export function Navigation({ initialUser }: { initialUser?: any }) {
         </div>
       )}
 
-      {walletAddress && (
-        <SendModal 
-          isOpen={isSendModalOpen} 
-          onClose={() => setIsSendModalOpen(false)} 
-          userToken={typeof window !== 'undefined' ? localStorage.getItem('circle_user_token') || '' : ''}
-          encryptionKey={typeof window !== 'undefined' ? localStorage.getItem('circle_encryption_key') || '' : ''}
-          onSuccess={() => {
-            setIsSendModalOpen(false);
-            window.dispatchEvent(new Event('wallet_changed'));
-          }}
-        />
-      )}
-
-      <WalletModal 
-        isOpen={isWalletModalOpen} 
-        onClose={() => setIsWalletModalOpen(false)} 
-        onSuccess={(address, token, encKey) => {
+      <ConnectWalletModal
+        isOpen={isWalletModalOpen}
+        onClose={() => setIsWalletModalOpen(false)}
+        onConnected={(addr) => {
           setIsWalletModalOpen(false);
-          localStorage.setItem('circle_wallet_address', address);
-          localStorage.setItem('circle_user_token', token);
-          localStorage.setItem('circle_encryption_key', encKey);
+          setWalletAddress(addr);
           window.dispatchEvent(new Event('wallet_changed'));
-          // Re-fetch the server-rendered user context (cookies now set) without
-          // a hard reload — avoids the full-page flash/flicker on connect.
           router.refresh();
         }}
       />

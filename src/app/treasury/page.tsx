@@ -14,7 +14,7 @@ export default async function TreasuryPage() {
     .single()
 
   const dailyLimit = 100.00
-  const spent = limitData ? parseFloat(limitData.spent_usdc) : 0.00
+  const spent = limitData ? parseFloat(limitData.spent_today_usdc ?? 0) : 0.00
   const remaining = dailyLimit - spent
   const percentage = (spent / dailyLimit) * 100
 
@@ -59,9 +59,9 @@ export default async function TreasuryPage() {
           <span>TREASURY STATUS: OPERATIONAL</span>
         </div>
         <div className="opacity-80 leading-relaxed">
-          The Agent Treasury operates as a server-side Externally Owned Account (EOA) on the Celo Mainnet. 
-          It autonomously issues EIP-3009 signed authorizations to acquire intellectual property licences 
-          during research synthesis, bounded strictly by the defined risk limits above.
+          The Agent Treasury operates as a server-side Externally Owned Account (EOA) on the Celo Mainnet.
+          It pays creators the moment the agent cites their work — every payout is a tagged USDC transfer,
+          bounded strictly by the defined risk limits above.
         </div>
       </div>
     </div>
