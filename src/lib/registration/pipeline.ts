@@ -3,7 +3,6 @@ import { createClient } from '@/utils/supabase/server'
 import { embedDocuments, serializeVector } from '@/lib/ai/embeddings'
 import { safeFetch } from '@/lib/net/safe-fetch'
 import { resolveOwningIdentity } from '@/lib/verification/verify'
-import { isArcUrl, resolveArcPost } from '@/lib/verification/resolve'
 import crypto from 'crypto'
 
 function extractMetadata(html: string) {
@@ -40,49 +39,40 @@ export async function registerArticle(targetUrl: string, creatorId: string, pric
     let title = 'Untitled'
     let readableText = ''
 
-    // 2. Arc House pages are a client-rendered shell: the post body lives inside
-    // a <script> block that generic extraction strips, so stripping tags here
-    // would embed navigation chrome instead of the article. Read the structured
-    // data directly.
-    if (isArcUrl(normalizedUrl)) {
-      const post = await resolveArcPost(normalizedUrl)
-      title = post.title
-      readableText = post.text
-    } else {
-      // 3. Try standard fetch first (with SSRF protection)
-      const response = await safeFetch(normalizedUrl).catch(() => null)
+    // 2. Fetch the article content (with SSRF protection). Standard fetch
+    // first, falling back to the Jina AI Reader API (bypasses Cloudflare &
+    // anti-bot) when the direct fetch fails.
+    const response = await safeFetch(normalizedUrl).catch(() => null)
 
-      if (!response || !response.ok) {
-        // 4. Fallback to Jina AI Reader API (bypasses Cloudflare & anti-bot)
-        const jinaResponse = await fetch(`https://r.jina.ai/${normalizedUrl}`)
-        if (!jinaResponse.ok) {
-          throw new Error(`Failed to fetch article (even with Jina AI fallback): ${jinaResponse.statusText}`)
-        }
-        readableText = await jinaResponse.text()
-
-        // Jina puts the title in the x-title header, but sometimes it's missing
-        title = jinaResponse.headers.get('x-title') || jinaResponse.headers.get('X-Title') || 'Untitled'
-
-        if (title === 'Untitled') {
-          const lines = readableText.split('\n')
-          const firstLine = lines[0]?.trim() || ''
-          if (firstLine.startsWith('Title:')) {
-            title = firstLine.replace('Title:', '').trim()
-          } else if (firstLine.startsWith('#')) {
-            title = firstLine.replace(/^#+\s*/, '').trim()
-          }
-        }
-      } else {
-        // Standard HTML Extraction
-        const contentType = response.headers.get('content-type') || ''
-        if (!contentType.includes('text/html')) {
-          throw new Error('Invalid content type. Expected text/html.')
-        }
-        const html = await response.text()
-        const extracted = extractMetadata(html)
-        title = extracted.title
-        readableText = extracted.readableText
+    if (!response || !response.ok) {
+      const jinaResponse = await fetch(`https://r.jina.ai/${normalizedUrl}`)
+      if (!jinaResponse.ok) {
+        throw new Error(`Failed to fetch article (even with Jina AI fallback): ${jinaResponse.statusText}`)
       }
+      readableText = await jinaResponse.text()
+
+      // Jina puts the title in the x-title header, but sometimes it's missing
+      title = jinaResponse.headers.get('x-title') || jinaResponse.headers.get('X-Title') || 'Untitled'
+
+      if (title === 'Untitled') {
+        const lines = readableText.split('\n')
+        const firstLine = lines[0]?.trim() || ''
+        if (firstLine.startsWith('Title:')) {
+          title = firstLine.replace('Title:', '').trim()
+        } else if (firstLine.startsWith('#')) {
+          title = firstLine.replace(/^#+\s*/, '').trim()
+        }
+      }
+    } else {
+      // Standard HTML Extraction
+      const contentType = response.headers.get('content-type') || ''
+      if (!contentType.includes('text/html')) {
+        throw new Error('Invalid content type. Expected text/html.')
+      }
+      const html = await response.text()
+      const extracted = extractMetadata(html)
+      title = extracted.title
+      readableText = extracted.readableText
     }
 
     const contentHash = crypto.createHash('sha256').update(readableText).digest('hex')
