@@ -38,13 +38,17 @@ export async function POST(request: NextRequest) {
     // Map the wallet to a deterministic "invisible" Supabase account so the
     // rest of the app (sources, sessions, RLS) keeps working unchanged. The
     // password is derived from a server secret — never exposed to the client.
+    //
+    // Users are created through the admin client with email_confirm: true so
+    // the flow never depends on the project's email-confirmation setting and
+    // no confirmation email is ever sent.
     const serverSecret = process.env.AUTH_SESSION_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY
     if (!serverSecret) {
       return NextResponse.json({ error: 'Server is missing AUTH_SESSION_SECRET' }, { status: 500 })
     }
 
     const supabase = await createClient()
-    const email = `${normalized}@thothpay.local`
+    const email = `${normalized}@users.thothpay.xyz`
     const password = crypto.createHash('sha256').update(normalized + serverSecret).digest('hex')
 
     let userId: string | null = null
@@ -52,12 +56,45 @@ export async function POST(request: NextRequest) {
     const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({ email, password })
 
     if (signInError) {
-      const { data: signUpData, error: signUpError } = await supabase.auth.signUp({ email, password })
-      if (signUpError) {
-        console.error('Invisible Supabase SignUp Error:', signUpError)
+      const adminAuth = createAdminClient()
+
+      // Does the account already exist but is unconfirmed?
+      const { data: existing } = await adminAuth.auth.admin.listUsers({ page: 1, perPage: 1000 })
+      const match = existing?.users?.find((u) => u.email === email)
+
+      if (match) {
+        // Confirm it so password sign-in works from now on.
+        const { error: updateError } = await adminAuth.auth.admin.updateUserById(match.id, {
+          email_confirm: true,
+          password,
+        })
+        if (updateError) {
+          console.error('Admin User Confirm Error:', updateError)
+          return NextResponse.json({ error: 'Failed to confirm user session' }, { status: 500 })
+        }
+      } else {
+        // Create the invisible account, pre-confirmed.
+        const { data: created, error: createError } = await adminAuth.auth.admin.createUser({
+          email,
+          password,
+          email_confirm: true,
+        })
+        if (createError) {
+          console.error('Invisible Supabase Create Error:', createError)
+          return NextResponse.json({ error: 'Failed to create internal user session' }, { status: 500 })
+        }
+        if (!created?.user?.id) {
+          return NextResponse.json({ error: 'Failed to create internal user session' }, { status: 500 })
+        }
+      }
+
+      // Now sign in to establish the SSR session cookies.
+      const { data: retryData, error: retryError } = await supabase.auth.signInWithPassword({ email, password })
+      if (retryError) {
+        console.error('Invisible Supabase SignIn Error:', retryError)
         return NextResponse.json({ error: 'Failed to create internal user session' }, { status: 500 })
       }
-      userId = signUpData.user?.id ?? null
+      userId = retryData.user?.id ?? null
     } else {
       userId = signInData.user?.id ?? null
     }
