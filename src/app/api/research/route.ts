@@ -110,11 +110,17 @@ export async function POST(request: NextRequest) {
             request.headers.get('cookie') || undefined
           )
 
-          // Mark session complete and save the result payload
-          await supabase
+          // Mark session complete and save the result payload. Surface a
+          // failure here instead of swallowing it — a silent error leaves the
+          // session 'active' forever and the ledger stats read zero.
+          const { error: completeError } = await supabase
             .from('research_sessions')
             .update({ status: 'completed', result: result })
             .eq('id', session.id)
+
+          if (completeError) {
+            console.error('Failed to mark research session completed:', completeError)
+          }
 
           pushUpdate('done', { result, sessionId: session.id })
           controller.close()
