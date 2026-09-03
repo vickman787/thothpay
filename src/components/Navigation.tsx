@@ -9,11 +9,12 @@ import ConnectWalletModal from "./ConnectWalletModal";
 
 function LogoMark({ size = 28 }: { size?: number }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 512 512" aria-hidden="true">
-      <rect width="512" height="512" rx="118" fill="#E8C468" />
-      <path d="M210,170 h92 v76 h-44 v38 h44 v58 h-92 z" fill="#0C0E0A" />
-      <path d="M310,170 h92 v76 h-44 v38 h44 v58 h-92 z" fill="#0C0E0A" />
-      <circle cx="150" cy="150" r="14" fill="#0C0E0A" />
+    <svg width={size} height={size} viewBox="0 0 120 120" aria-hidden="true">
+      <path d="M 30,20 C 52,34 74,58 88,84 L 74,92 C 62,70 42,48 26,38 Z" fill="#e8b84b" />
+      <path d="M 30,20 L 88,84" stroke="#0e0a05" strokeWidth="5" strokeLinecap="round" />
+      <path d="M 34,28 L 24,34 M 44,38 L 34,44 M 56,52 L 46,58 M 66,66 L 58,72" stroke="#0e0a05" strokeWidth="4" strokeLinecap="round" />
+      <circle cx="70" cy="90" r="19" fill="#e8b84b" />
+      <circle cx="70" cy="90" r="11" fill="#0e0a05" />
     </svg>
   );
 }

@@ -5,18 +5,18 @@
    deep ember accents. */
 
 @theme {
-  --color-paper: #0B0A07;          /* page background — warm ink */
-  --color-panel: #16130C;          /* raised surfaces */
-  --color-panel-deep: #120F09;     /* inputs, wells */
-  --color-ink: #EFE6CF;            /* primary text — warm parchment */
-  --color-soft-ink: #A99F87;       /* secondary text */
-  --color-olive: #7C7357;          /* muted text, labels */
-  --color-faint: #57503C;          /* faintest text */
-  --color-signal-green: #E8C468;   /* gilded gold accent */
-  --color-amber: #FFB454;          /* scores, warnings */
-  --color-rust: #FF7A5C;           /* errors — ember */
-  --color-border-subtle: rgba(239, 230, 207, 0.1);
-  --color-border-strong: rgba(239, 230, 207, 0.22);
+  --color-paper: #0e0a05;          /* page background — near-black ember */
+  --color-panel: #181209;          /* raised surfaces */
+  --color-panel-deep: #120e07;     /* inputs, wells */
+  --color-ink: #f3e7cf;            /* primary text — warm parchment */
+  --color-soft-ink: #c9b78a;       /* secondary text */
+  --color-olive: #9c8b6b;          /* muted text, labels */
+  --color-faint: #6b5d42;          /* faintest text */
+  --color-signal-green: #e8b84b;   /* antique gold accent */
+  --color-amber: #d97742;          /* scores, warnings — ember */
+  --color-rust: #e05b3d;           /* errors */
+  --color-border-subtle: rgba(243, 231, 207, 0.12);
+  --color-border-strong: rgba(243, 231, 207, 0.24);
 
   --font-sans: var(--font-sans);
   --font-mono: var(--font-mono);
@@ -26,7 +26,7 @@
 :root {
   --background: var(--color-paper);
   --foreground: var(--color-ink);
-  --green-glow: rgba(232, 196, 104, 0.14);
+  --green-glow: rgba(232, 184, 75, 0.14);
 }
 
 body {
