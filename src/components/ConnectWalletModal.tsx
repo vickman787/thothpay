@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useConnect, useDisconnect, useSignMessage } from 'wagmi';
 import { useRouter } from 'next/navigation';
 import { AUTH_MESSAGE } from '@/lib/auth-message';
+import { ensureCeloNetwork } from '@/lib/celo';
 
 interface ConnectWalletModalProps {
   isOpen: boolean;
@@ -11,7 +12,7 @@ interface ConnectWalletModalProps {
   onConnected: (address: string) => void;
 }
 
-type ConnectState = 'IDLE' | 'SIGNING' | 'VERIFYING' | 'COMPLETED';
+type ConnectState = 'IDLE' | 'VERIFYING' | 'SIGNING' | 'COMPLETED';
 
 export default function ConnectWalletModal({ isOpen, onClose, onConnected }: ConnectWalletModalProps) {
   const { connectors, connectAsync } = useConnect();
@@ -33,14 +34,22 @@ export default function ConnectWalletModal({ isOpen, onClose, onConnected }: Con
 
   const handleConnect = async (connectorId: string) => {
     setError(null);
+    let didConnect = false;
     try {
       const connector = connectors.find((c) => c.id === connectorId);
       if (!connector) throw new Error('Unknown wallet connector');
 
       setState('VERIFYING');
       const result = await connectAsync({ connector });
+      didConnect = true;
       const connectedAddress = result.accounts?.[0];
       if (!connectedAddress) throw new Error('Could not read wallet address after connecting');
+
+      // Auto-add / switch the wallet to Celo mainnet (network id 42220) so the
+      // user can fund the treasury without manually configuring the network.
+      const maybeProvider = await (connector as any).getProvider?.().catch?.(() => null)
+      const provider = maybeProvider ?? (connector as any).provider ?? (window as any).ethereum
+      await ensureCeloNetwork(provider);
 
       setState('SIGNING');
       const signature = await signMessageAsync({ message: AUTH_MESSAGE });
@@ -63,7 +72,9 @@ export default function ConnectWalletModal({ isOpen, onClose, onConnected }: Con
     } catch (err: any) {
       console.error('Connect error:', err);
       setError(err.message || 'Connection failed');
-      try { await disconnect(); } catch { /* ignore */ }
+      if (didConnect) {
+        try { await disconnect(); } catch { /* ignore */ }
+      }
       setState('IDLE');
     }
   };
@@ -85,9 +96,9 @@ export default function ConnectWalletModal({ isOpen, onClose, onConnected }: Con
           </h2>
           <p className="text-sm text-[var(--color-soft-ink)]">
             {state === 'SIGNING' && 'Sign the message in your wallet to prove ownership…'}
-            {state === 'VERIFYING' && 'Verifying signature on Celo…'}
+            {state === 'VERIFYING' && 'Adding Celo network & verifying signature…'}
             {state === 'COMPLETED' && 'Wallet connected. You can now query the agent.'}
-            {(state === 'IDLE') && 'Choose a wallet. You\'ll sign a free message — no transaction.'}
+            {(state === 'IDLE') && 'Choose a wallet. Celo mainnet is added automatically — no manual setup.'}
           </p>
         </div>
 

@@ -10,6 +10,37 @@ export const TREASURY_ADDRESS =
     "0xcc4BCDD595Ee20cFB8A214Dc570eCB3Fb1C1d3A1") as Address
 export const USDC_DECIMALS = 6n
 
+// EIP-3085 chain parameters used to add/switch a wallet to Celo mainnet via
+// wallet_addEthereumChain / wallet_switchEthereumChain.
+export const CELO_CHAIN_PARAMS = {
+  chainId: `0x${celo.id.toString(16)}`, // 0xa4ec = 42220
+  chainName: "Celo Mainnet",
+  nativeCurrency: { name: "CELO", symbol: "CELO", decimals: 18 },
+  rpcUrls: [process.env.NEXT_PUBLIC_CELO_RPC_URL || "https://forno.celo.org"],
+  blockExplorerUrls: ["https://celoscan.io"],
+}
+
+export async function ensureCeloNetwork(ethereum: any) {
+  if (!ethereum?.request) return
+  try {
+    // First try to switch; if the network isn't installed the wallet throws 4902.
+    await ethereum.request({
+      method: "wallet_switchEthereumChain",
+      params: [{ chainId: CELO_CHAIN_PARAMS.chainId }],
+    })
+  } catch (switchError: any) {
+    if (switchError?.code === 4902) {
+      await ethereum.request({
+        method: "wallet_addEthereumChain",
+        params: [CELO_CHAIN_PARAMS],
+      })
+    } else if (switchError?.code !== 4001) {
+      // 4001 = user rejected; anything else that isn't "network missing" we surface.
+      throw switchError
+    }
+  }
+}
+
 const ERC20_ABI = parseAbi([
   "function transfer(address to, uint256 amount) returns (bool)",
   "function balanceOf(address account) returns (uint256)",
