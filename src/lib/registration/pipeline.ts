@@ -39,40 +39,81 @@ export async function registerArticle(targetUrl: string, creatorId: string, pric
     let title = 'Untitled'
     let readableText = ''
 
-    // 2. Fetch the article content (with SSRF protection). Standard fetch
-    // first, falling back to the Jina AI Reader API (bypasses Cloudflare &
-    // anti-bot) when the direct fetch fails.
+    // 2. Fetch the article content (with SSRF protection).
+    //
+    // X/Twitter embed the full post body in an <h1 class="sr-only"> element for
+    // SEO, so a direct fetch is enough there — no Jina needed. Other JS-heavy
+    // platforms, and any direct extraction that comes back too thin to cite,
+    // fall back to the Jina AI Reader.
+    const isXUrl = /(^|\.)(x\.com|twitter\.com)$/.test(new URL(normalizedUrl).hostname.replace(/^www\./, ''))
     const response = await safeFetch(normalizedUrl).catch(() => null)
 
-    if (!response || !response.ok) {
+    if (response?.ok) {
+      const contentType = response.headers.get('content-type') || ''
+      if (contentType.includes('text/html')) {
+        const html = await response.text()
+
+        if (isXUrl) {
+          // The full post text lives in the sr-only h1 that search engines read.
+          const h1 = html.match(/<h1[^>]*class="sr-only"[^>]*>([\s\S]*?)<\/h1>/i)
+          const postText = h1
+            ? h1[1].replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
+            : ''
+          if (postText.length >= 200) {
+            readableText = postText
+          }
+          // Title from the page's <title> or og:title, minus the " / X" suffix.
+          const pageTitle =
+            html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i)?.[1] ||
+            html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ||
+            ''
+          const cleaned = pageTitle.replace(/\/ X\s*$/i, '').trim()
+          if (cleaned) title = cleaned.replace(/^Vickman on X:\s*/i, '')
+        } else {
+          const extracted = extractMetadata(html)
+          title = extracted.title
+          readableText = extracted.readableText
+        }
+      }
+    }
+
+    // Direct fetch failed, wasn't HTML, or yielded too little to cite.
+    if (readableText.trim().length < 200) {
       const jinaResponse = await fetch(`https://r.jina.ai/${normalizedUrl}`)
       if (!jinaResponse.ok) {
         throw new Error(`Failed to fetch article (even with Jina AI fallback): ${jinaResponse.statusText}`)
       }
-      readableText = await jinaResponse.text()
+      let jinaText = await jinaResponse.text()
+
+      // Jina pages append platform chrome after the real content (login walls,
+      // "Relevant people", nav, etc.). Cut at the first obvious chrome marker so
+      // only the article body is embedded and later cited.
+      const chromeMarkers = [
+        'Log in or sign up for X',
+        'Sign in to continue',
+        'Relevant people',
+        'See what\u2019s happening',
+        'Continue with phone',
+        'Related stories',
+      ]
+      const cutIndex = chromeMarkers.reduce(
+        (earliest, marker) => {
+          const at = jinaText.indexOf(marker)
+          return at !== -1 && (earliest === -1 || at < earliest) ? at : earliest
+        },
+        -1
+      )
+      if (cutIndex !== -1) jinaText = jinaText.slice(0, cutIndex)
+
+      readableText = jinaText.trim()
 
       // Jina puts the title in the x-title header, but sometimes it's missing
-      title = jinaResponse.headers.get('x-title') || jinaResponse.headers.get('X-Title') || 'Untitled'
+      const jinaTitle = jinaResponse.headers.get('x-title') || jinaResponse.headers.get('X-Title') || ''
+      if (jinaTitle) title = jinaTitle
+    }
 
-      if (title === 'Untitled') {
-        const lines = readableText.split('\n')
-        const firstLine = lines[0]?.trim() || ''
-        if (firstLine.startsWith('Title:')) {
-          title = firstLine.replace('Title:', '').trim()
-        } else if (firstLine.startsWith('#')) {
-          title = firstLine.replace(/^#+\s*/, '').trim()
-        }
-      }
-    } else {
-      // Standard HTML Extraction
-      const contentType = response.headers.get('content-type') || ''
-      if (!contentType.includes('text/html')) {
-        throw new Error('Invalid content type. Expected text/html.')
-      }
-      const html = await response.text()
-      const extracted = extractMetadata(html)
-      title = extracted.title
-      readableText = extracted.readableText
+    if (readableText.trim().length < 200) {
+      throw new Error('Could not read enough article content to register this source.')
     }
 
     const contentHash = crypto.createHash('sha256').update(readableText).digest('hex')

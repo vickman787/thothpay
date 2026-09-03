@@ -5,8 +5,13 @@
   "image": "https://raw.githubusercontent.com/vickman787/thothpay/main/assets/thothpay-avatar.jpg",
   "active": true,
   "services": [
-    { "type": "https", "url": "https://thothpay.xyz/" },
-    { "type": "https", "url": "https://github.com/vickman787/thothpay" }
+    {
+      "name": "web",
+      "method": "GET",
+      "endpoint": "https://github.com/vickman787/thothpay",
+      "protocol": "Web",
+      "description": "ThothPay source repository and documentation"
+    }
   ],
   "x402Support": false,
   "registrations": [],
