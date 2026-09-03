@@ -20,7 +20,7 @@ const mono = IBM_Plex_Mono({
 
 export const metadata: Metadata = {
   title: "ThothPay | Celo Mainnet",
-  description: "Every citation pays its author. Stablecoin nanopayments per citation on Celo, settled over x402.",
+  description: "Every citation pays its author. USDC nanopayments per citation on Celo, tagged on-chain.",
 };
 
 function SetupScreen({ env }: { env: ReturnType<typeof validateEnv> }) {
@@ -88,7 +88,7 @@ export default async function RootLayout({
                   <span className="glow-dot"></span>
                   <span className="text-[var(--color-signal-green)]">CELO MAINNET · LIVE</span>
                 </span>
-                <span>X402</span>
+                <span>ERC-8021 · TAGGED</span>
               </div>
             </div>
           )}

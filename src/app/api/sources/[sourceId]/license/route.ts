@@ -31,7 +31,7 @@ export async function GET(
       )
     }
 
-    // Return the HTTP 402 Payment Required response as per x402 standards
+    // Return an HTTP 402 Payment Required-style response describing the licence
     return NextResponse.json(
       {
         message: 'Payment Required',

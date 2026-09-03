@@ -50,10 +50,8 @@ export async function authorizePayment(sessionId: string, sourceId: string, amou
     throw new Error('Research session budget exceeded')
   }
 
-  // 2. Generate Internal Authorization
-  // Since we are using Circle Developer-Controlled Wallets, the actual signing
-  // and execution happens on Circle's servers during the Gateway phase.
-  // We just generate an internal Cryptographic Authorization ID to hand to the agent.
+  // 2. Generate an internal authorization record for this citation. The actual
+  // on-chain USDC payout runs later via the treasury wallet (celo-payouts).
   
   const authorizationId = `auth_${crypto.randomBytes(12).toString('hex')}`
   const nonce = `0x${crypto.randomBytes(32).toString('hex')}`

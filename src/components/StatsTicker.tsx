@@ -13,7 +13,7 @@ export default function StatsTicker({ stats }: { stats: NetworkStats }) {
     <span key="avg">AVG ANSWER COST: <b className="text-[var(--color-ink)]">${stats.avgAnswerCost.toFixed(2)}</b></span>,
     <span key="src">REGISTERED SOURCES: <b className="text-[var(--color-ink)]">{stats.registeredSources.toLocaleString('en-US')}</b></span>,
     <span key="ppp">PAY-PER-PROMPT · NO SUBSCRIPTIONS</span>,
-    <span key="x402">X402 · USDC SETTLEMENTS · ERC-8021 TAGGED</span>,
+    <span key="usdc">NATIVE USDC · ERC-8021 TAGGED SETTLEMENTS</span>,
   ]
 
   const half = (keyPrefix: string) => (

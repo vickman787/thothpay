@@ -5,10 +5,10 @@
   "image": "https://raw.githubusercontent.com/vickman787/thothpay/main/assets/thothpay-avatar.jpg",
   "active": true,
   "services": [
-    { "type": "https", "url": "https://thothpay.xyz/api/agent/research" },
-    { "type": "mcp", "url": "https://github.com/vickman787/thothpay" }
+    { "type": "https", "url": "https://thothpay.xyz/" },
+    { "type": "https", "url": "https://github.com/vickman787/thothpay" }
   ],
-  "x402Support": true,
+  "x402Support": false,
   "registrations": [],
   "supportedTrust": ["reputation"]
 }
