@@ -180,9 +180,11 @@ export async function runResearchAgent(
   onProgress?: (msg: string) => void,
   cookieHeader?: string
 ) {
-  let maxBudget = initialBudget;
   let totalSpentOnSources = 0;
-  const platformFee = 0.20; // Ensure we keep $0.20 as platform revenue per prompt
+  // Revenue comes solely from the 20% take-rate applied to each citation
+  // payout (see /api/sources/[sourceId]/license). There is deliberately no
+  // per-prompt fee: whatever the agent doesn't spend on citations is refunded,
+  // so a query that cites nothing costs the researcher nothing.
   
   try {
   const supabase = createAdminClient()
@@ -325,7 +327,6 @@ export async function runResearchAgent(
           receipt: licenseData.receipt
         })
         const price = parseFloat(source.price_usdc);
-        maxBudget -= price;
         totalSpentOnSources += price;
         if (onProgress) onProgress(`Payment Settled. Gateway Batch ID: ${licenseData.receipt.gatewaySettlementId}`)
       }
@@ -336,22 +337,27 @@ export async function runResearchAgent(
   }
 
   // --- Backend Refund Mechanism ---
+  // Everything the agent didn't spend on citations goes back to the payer.
+  // The platform's cut is already taken out of each citation payout, so there
+  // is nothing further to deduct here.
   if (walletAddress) {
-    // Waive the platform fee if no sources were useful (100% full refund)
-    const actualPlatformFee = totalSpentOnSources > 0 ? platformFee : 0;
-    const unspentBudget = initialBudget - totalSpentOnSources - actualPlatformFee;
-    
-    if (unspentBudget >= 0.05) {
-      if (onProgress) onProgress(`Calculating budget... Unspent budget is $${unspentBudget.toFixed(2)}. Initiating refund...`)
+    const unspentBudget = initialBudget - totalSpentOnSources;
+
+    // Refunds below this are worth less than the gas to send them.
+    const MIN_REFUND_USDC = 0.01
+
+    if (unspentBudget >= MIN_REFUND_USDC) {
+      const amount = unspentBudget.toFixed(6)
+      if (onProgress) onProgress(`Calculating budget... Unspent budget is $${amount}. Initiating refund...`)
       try {
-        await executeGatewayTransfer(walletAddress, unspentBudget.toFixed(2));
-        if (onProgress) onProgress(`Refunded $${unspentBudget.toFixed(2)} to your wallet.`)
+        await executeGatewayTransfer(walletAddress, amount);
+        if (onProgress) onProgress(`Refunded $${amount} to your wallet.`)
       } catch (err: any) {
         console.error("Refund failed:", err);
         if (onProgress) onProgress(`Warning: Refund transfer failed (${err.message})`)
       }
-    } else {
-      if (onProgress) onProgress(`Unspent budget is $${unspentBudget.toFixed(2)} (below $0.05 minimum threshold). Retained by Treasury.`)
+    } else if (unspentBudget > 0) {
+      if (onProgress) onProgress(`Unspent budget is $${unspentBudget.toFixed(6)} (below the $${MIN_REFUND_USDC.toFixed(2)} refund minimum). Retained by Treasury.`)
     }
   }
 
