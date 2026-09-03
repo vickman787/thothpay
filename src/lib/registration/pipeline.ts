@@ -5,6 +5,16 @@ import { safeFetch } from '@/lib/net/safe-fetch'
 import { resolveOwningIdentity } from '@/lib/verification/verify'
 import crypto from 'crypto'
 
+function decodeEntities(text: string): string {
+  const named: Record<string, string> = {
+    amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ',
+  }
+  return text
+    .replace(/&#x([0-9a-f]+);/gi, (_m, hex) => String.fromCodePoint(parseInt(hex, 16)))
+    .replace(/&#(\d+);/g, (_m, dec) => String.fromCodePoint(parseInt(dec, 10)))
+    .replace(/&([a-z]+);/gi, (m, name) => named[name.toLowerCase()] ?? m)
+}
+
 function extractMetadata(html: string) {
   // Extremely rudimentary metadata extraction regex for demonstration
   // In production, we would use cheerio and sanitize-html
@@ -62,13 +72,21 @@ export async function registerArticle(targetUrl: string, creatorId: string, pric
           if (postText.length >= 200) {
             readableText = postText
           }
-          // Title from the page's <title> or og:title, minus the " / X" suffix.
-          const pageTitle =
-            html.match(/<meta[^>]+property="og:title"[^>]+content="([^"]+)"/i)?.[1] ||
-            html.match(/<title[^>]*>([^<]+)<\/title>/i)?.[1] ||
-            ''
-          const cleaned = pageTitle.replace(/\/ X\s*$/i, '').trim()
-          if (cleaned) title = cleaned.replace(/^Vickman on X:\s*/i, '')
+
+          // X's own <title>/og:title is just "<Name> (@handle) on X", which is
+          // useless as an article title. Derive one from the post's opening
+          // sentence instead, and keep the handle as attribution.
+          const handle = html.match(/<meta[^>]+property="article:author"[^>]+content="[^"]*?\/([A-Za-z0-9_]+)"/i)?.[1]
+          const body = decodeEntities(postText)
+            // strip a leading `Name on X: "` wrapper if the h1 included it
+            .replace(/^.*?\son X:\s*["“]?/i, '')
+          const firstSentence = body.split(/(?<=[.!?])\s/)[0]?.trim() || ''
+          const short = firstSentence.length > 110
+            ? `${firstSentence.slice(0, 107).trimEnd()}...`
+            : firstSentence
+          if (short) {
+            title = handle ? `${short} — @${handle}` : short
+          }
         } else {
           const extracted = extractMetadata(html)
           title = extracted.title
