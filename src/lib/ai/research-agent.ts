@@ -1,5 +1,5 @@
 import { createAdminClient } from '@/utils/supabase/admin'
-import { authorizePayment } from '../payments/treasury'
+import { settleCitation } from '../payments/settle-citation'
 import { executeGatewayTransfer } from '../payments/celo-payouts'
 import { embedQuery, cosineSimilarity, parseVector } from './embeddings'
 import { z } from 'zod'
@@ -177,14 +177,13 @@ export async function runResearchAgent(
   query: string,
   initialBudget: number,
   walletAddress: string | undefined,
-  onProgress?: (msg: string) => void,
-  cookieHeader?: string
+  onProgress?: (msg: string) => void
 ) {
   let totalSpentOnSources = 0;
   // Revenue comes solely from the 20% take-rate applied to each citation
-  // payout (see /api/sources/[sourceId]/license). There is deliberately no
-  // per-prompt fee: whatever the agent doesn't spend on citations is refunded,
-  // so a query that cites nothing costs the researcher nothing.
+  // payout. There is deliberately no per-prompt fee: whatever the agent
+  // doesn't spend on citations is refunded, so a query that cites nothing
+  // costs the researcher nothing.
   
   try {
   const supabase = createAdminClient()
@@ -305,31 +304,18 @@ export async function runResearchAgent(
     if (!source) continue
 
     try {
-      const { payload } = await authorizePayment(sessionId, source.id, parseFloat(source.price_usdc), 'recipient_placeholder')
-      
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-      const licenseRes = await fetch(`${baseUrl}/api/sources/${source.id}/license`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(cookieHeader ? { 'Cookie': cookieHeader } : {})
-        },
-        body: JSON.stringify(payload)
-      })
+      const price = parseFloat(source.price_usdc)
+      const settlement = await settleCitation(sessionId, source.id, price)
 
-      if (licenseRes.ok) {
-        const licenseData = await licenseRes.json()
-        purchasedSources.push({
-          id: source.id,
-          title: source.title,
-          url: source.url,
-          content: source.content,
-          receipt: licenseData.receipt
-        })
-        const price = parseFloat(source.price_usdc);
-        totalSpentOnSources += price;
-        if (onProgress) onProgress(`Payment Settled. Gateway Batch ID: ${licenseData.receipt.gatewaySettlementId}`)
-      }
+      purchasedSources.push({
+        id: source.id,
+        title: source.title,
+        url: source.url,
+        content: source.content,
+        receipt: settlement.receipt
+      })
+      totalSpentOnSources += price;
+      if (onProgress) onProgress(`Payment Settled. Gateway tx: ${settlement.receipt.gatewaySettlementId}`)
     } catch (e: any) {
       console.error(`Failed to purchase source ${source.id}:`, e.message)
       if (onProgress) onProgress(`Payment execution failed for ${source.title}.`)

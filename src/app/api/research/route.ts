@@ -47,6 +47,23 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Bind the payment to the authenticated user: only a wallet they have
+    // proven ownership of (their profile wallet) can fund their own session.
+    // Otherwise anyone could replay someone else's treasury transfer to get
+    // free research at the real payer's expense.
+    const { data: profile } = await userClient
+      .from('profiles')
+      .select('wallet_address')
+      .eq('id', user.id)
+      .single()
+
+    if (!profile?.wallet_address || profile.wallet_address.toLowerCase() !== funding.from.toLowerCase()) {
+      return NextResponse.json(
+        { error: 'Payment must come from the wallet connected to your account.' },
+        { status: 403 }
+      )
+    }
+
     // Refund destination is the verified payer (their own wallet)
     const refundAddress = funding.from.toLowerCase()
 
@@ -106,8 +123,7 @@ export async function POST(request: NextRequest) {
             query,
             maxBudget,
             refundAddress,
-            (msg) => pushUpdate('progress', msg),
-            request.headers.get('cookie') || undefined
+            (msg) => pushUpdate('progress', msg)
           )
 
           // Mark session complete and save the result payload. Surface a

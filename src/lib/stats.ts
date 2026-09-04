@@ -1,4 +1,4 @@
-import { createClient } from '@/utils/supabase/server'
+import { createAdminClient } from '@/utils/supabase/admin'
 
 export const CREATOR_SHARE = 0.8 // 20% platform fee
 
@@ -9,9 +9,11 @@ export interface NetworkStats {
   registeredSources: number
 }
 
-// Live network stats from the ledger — used by the ticker and the landing page tiles
+// Live network stats from the ledger — used by the ticker and the landing page
+// tiles. Runs with the service-role client (server-only) so aggregate figures
+// don't require opening user-owned tables to public reads.
 export async function getNetworkStats(): Promise<NetworkStats> {
-  const supabase = await createClient()
+  const supabase = createAdminClient()
 
   const [{ count: answersServed }, { data: settledAmounts }, { count: registeredSources }] = await Promise.all([
     supabase.from('research_sessions').select('*', { count: 'exact', head: true }).eq('status', 'completed'),
