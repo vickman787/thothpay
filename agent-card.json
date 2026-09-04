@@ -8,9 +8,16 @@
     {
       "name": "web",
       "method": "GET",
+      "endpoint": "https://www.thothpay.xyz",
+      "protocol": "Web",
+      "description": "ThothPay research terminal. Ask a question and every cited author is paid in USDC on Celo."
+    },
+    {
+      "name": "source-code",
+      "method": "GET",
       "endpoint": "https://github.com/vickman787/thothpay",
       "protocol": "Web",
-      "description": "ThothPay source repository and documentation"
+      "description": "Open source repository"
     }
   ],
   "x402Support": false,

@@ -3,6 +3,8 @@
 > **The research agent that pays its sources.**
 > Ask a question. Get a grounded, cited answer. The creators behind it get paid — in stablecoins on Celo, automatically, the moment the citation happens.
 
+**Live at [thothpay.xyz](https://www.thothpay.xyz)**
+
 ThothPay is a Web3-native AI research agent built to solve a problem every AI product shares: **content creators are rarely compensated when an agent scrapes and synthesizes their work.** A researcher locks a budget, the agent grounds its answer only in registered, verified sources, and every source it actually cites gets paid on the spot — no subscriptions, no ad revenue splits, no invoices.
 
 ![Next.js](https://img.shields.io/badge/Next.js-16-black?style=flat&logo=next.js)

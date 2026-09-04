@@ -4,6 +4,8 @@ import fs from "node:fs"
 const OUT = "assets/social"
 fs.mkdirSync(OUT, { recursive: true })
 
+const APP_URL = "thothpay.xyz"
+
 // Temple Gold palette
 const INK = "#0e0a05"
 const PANEL = "#181209"
@@ -34,14 +36,15 @@ const hero = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" 
   </defs>
   <rect width="1600" height="900" fill="url(#glow)"/>
   ${Array.from({ length: 30 }, (_, i) => `<rect y="${i * 30}" width="1600" height="1" fill="${PAPER}" opacity="0.02"/>`).join("")}
-  ${QUILL(690, 110, 1.9)}
-  <text x="800" y="450" ${FONT} font-size="86" font-weight="700" fill="${PAPER}" text-anchor="middle">ThothPay</text>
-  <text x="800" y="530" ${FONT} font-size="42" font-weight="600" fill="${GOLD}" text-anchor="middle">Every citation pays its author.</text>
-  <text x="800" y="600" ${FONT} font-size="27" fill="${MUTED}" text-anchor="middle">An AI research agent that pays creators in USDC</text>
-  <text x="800" y="640" ${FONT} font-size="27" fill="${MUTED}" text-anchor="middle">the instant their work is cited.</text>
-  <rect x="600" y="716" width="400" height="58" rx="6" fill="none" stroke="${GOLD}" stroke-opacity="0.45"/>
-  <circle cx="644" cy="745" r="7" fill="${GOLD}"/>
-  <text x="668" y="753" ${MONO} font-size="23" fill="${GOLD}">CELO MAINNET · LIVE</text>
+  ${QUILL(690, 96, 1.9)}
+  <text x="800" y="436" ${FONT} font-size="86" font-weight="700" fill="${PAPER}" text-anchor="middle">ThothPay</text>
+  <text x="800" y="514" ${FONT} font-size="42" font-weight="600" fill="${GOLD}" text-anchor="middle">Every citation pays its author.</text>
+  <text x="800" y="584" ${FONT} font-size="27" fill="${MUTED}" text-anchor="middle">An AI research agent that pays creators in USDC</text>
+  <text x="800" y="624" ${FONT} font-size="27" fill="${MUTED}" text-anchor="middle">the instant their work is cited.</text>
+  <rect x="600" y="690" width="400" height="58" rx="6" fill="none" stroke="${GOLD}" stroke-opacity="0.45"/>
+  <circle cx="644" cy="719" r="7" fill="${GOLD}"/>
+  <text x="668" y="727" ${MONO} font-size="23" fill="${GOLD}">CELO MAINNET · LIVE</text>
+  <text x="800" y="812" ${MONO} font-size="30" fill="${PAPER}" text-anchor="middle">${APP_URL}</text>
 </svg>`
 
 // ── 2. HOW IT WORKS ─────────────────────────────────────────────
@@ -71,7 +74,7 @@ const flow = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900" 
   <text x="168" y="126" ${FONT} font-size="40" font-weight="700" fill="${PAPER}">How ThothPay works</text>
   <text x="90" y="192" ${FONT} font-size="26" fill="${MUTED}">Four steps, one honest loop. Every payout is tagged and verifiable on Celo mainnet.</text>
   ${steps.map((s, i) => card(i, s)).join("")}
-  <text x="90" y="866" ${MONO} font-size="22" fill="${GOLD}" opacity="0.8">github.com/vickman787/thothpay</text>
+  <text x="90" y="866" ${MONO} font-size="24" fill="${GOLD}">${APP_URL}</text>
 </svg>`
 
 // ── 3. PROOF CARD ───────────────────────────────────────────────
@@ -94,8 +97,8 @@ const proof = `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="900"
     <text x="700" y="${330 + i * 82}" ${MONO} font-size="27" fill="${GOLD}">${v}</text>
     ${i < rows.length - 1 ? `<rect x="140" y="${356 + i * 82}" width="1320" height="1" fill="${PAPER}" opacity="0.09"/>` : ""}
   `).join("")}
-  <text x="90" y="790" ${FONT} font-size="27" fill="${PAPER}">Creators keep 80% of every citation fee, paid instantly.</text>
-  <text x="90" y="866" ${MONO} font-size="22" fill="${EMBER}" opacity="0.9">8004scan.io/agents/celo/9803</text>
+  <text x="90" y="782" ${FONT} font-size="27" fill="${PAPER}">Creators keep 80% of every citation fee, paid instantly.</text>
+  <text x="90" y="866" ${MONO} font-size="24" fill="${EMBER}">${APP_URL}</text>
 </svg>`
 
 for (const [name, svg] of [["1-hero", hero], ["2-how-it-works", flow], ["3-proof", proof]]) {
