@@ -7,20 +7,23 @@ const abi = parseAbi([
   "function setAgentURI(uint256 agentId, string agentURI) external",
 ])
 
+// Bump the version query string to force 8004scan to re-fetch the agent card.
+const VERSION = process.env.CARD_VERSION || "3"
+
 const pk = process.env.PK
 const account = privateKeyToAccount(pk)
 const wallet = createWalletClient({ account, chain: celo, transport: http("https://forno.celo.org") })
 const publicClient = createPublicClient({ chain: celo, transport: http("https://forno.celo.org") })
 
+const uri = `https://raw.githubusercontent.com/vickman787/thothpay/main/agent-card.json?v=${VERSION}`
+
 const hash = await wallet.writeContract({
   address: REGISTRY,
   abi,
   functionName: "setAgentURI",
-  args: [
-    9803n,
-    "https://raw.githubusercontent.com/vickman787/thothpay/main/agent-card.json?v=2",
-  ],
+  args: [9803n, uri],
 })
 console.log("tx:", hash)
 const receipt = await publicClient.waitForTransactionReceipt({ hash })
 console.log("status:", receipt.status)
+console.log("uri:", uri)
