@@ -17,6 +17,9 @@ export default function ResearchWorkspacePage() {
   const [progressLog, setProgressLog] = useState<string[]>([])
   const [result, setResult] = useState<any>(null)
   const [error, setError] = useState<string | null>(null)
+  const [pendingPayments, setPendingPayments] = useState<string[]>([])
+  const [recovering, setRecovering] = useState(false)
+  const [recoveryMsg, setRecoveryMsg] = useState<string | null>(null)
 
   interface HistoryItem {
     id?: string;
@@ -65,6 +68,46 @@ export default function ResearchWorkspacePage() {
     }
   }
 
+  // Load any payments that never reached a session (e.g. mobile failures).
+  useEffect(() => {
+    const pend = JSON.parse(localStorage.getItem('thothpay_pending') || '[]')
+    if (pend.length > 0) setPendingPayments(pend)
+  }, [])
+
+  // Reclaim stranded payments: tell the server which txHashes never funded a
+  // session; it refunds any that were sent to the treasury from this wallet.
+  const handleRecover = async () => {
+    if (pendingPayments.length === 0) return
+    setRecovering(true)
+    setRecoveryMsg(null)
+    try {
+      const res = await fetch('/api/research/recover', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ txHashes: pendingPayments }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Recovery failed')
+      const refunded = data.results?.filter((r: any) => r.status === 'refunded') || []
+      const used = data.results?.filter((r: any) => r.status === 'used-by-session') || []
+      const kept = data.results?.filter((r: any) => r.status !== 'refunded' && r.status !== 'used-by-session') || []
+      // Clear recovered/used; keep anything still ambiguous.
+      const drop = new Set([...refunded, ...used].map((r: any) => r.txHash))
+      const remaining = pendingPayments.filter((h) => !drop.has(h) && kept.some((k: any) => k.txHash === h))
+      localStorage.setItem('thothpay_pending', JSON.stringify(remaining))
+      setPendingPayments(remaining)
+      setRecoveryMsg(
+        refunded.length
+          ? `Recovered ${refunded.length} payment${refunded.length === 1 ? '' : 's'} — refunded to your wallet.`
+          : 'No stranded payments to refund. If one is still pending on-chain, it may take a moment.'
+      )
+    } catch (err: any) {
+      setRecoveryMsg(`Recovery failed: ${err.message}`)
+    } finally {
+      setRecovering(false)
+    }
+  }
+
   // Sends USDC from the user's own wallet to the treasury, then runs research.
   const handleSubmit = useCallback(async (e: React.FormEvent) => {
     e.preventDefault()
@@ -81,6 +124,19 @@ export default function ResearchWorkspacePage() {
       const budget = parseFloat(maxBudget)
       if (!Number.isFinite(budget) || budget <= 0) throw new Error('Enter a valid budget')
 
+      // Preflight BEFORE any money moves: confirms the session is valid and
+      // the wallet is attached, so a user never pays into a run that will be
+      // rejected for an auth/input error (the mobile failure we saw).
+      const pre = await fetch('/api/research/preflight', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, maxBudget: budget }),
+      })
+      if (!pre.ok) {
+        const perr = await pre.json().catch(() => ({}))
+        throw new Error(perr.error || 'Could not start a research session. Reconnect your wallet and try again.')
+      }
+
       setProgressLog(prev => [...prev, `Requesting transfer of $${budget.toFixed(2)} USDC to the treasury…`])
 
       const txHash = await writeContractAsync({
@@ -91,6 +147,14 @@ export default function ResearchWorkspacePage() {
       })
 
       if (!txHash) throw new Error('No transaction hash returned from wallet')
+
+      // Stash the txHash BEFORE calling the API. If this request fails or the
+      // tab dies (mobile), the payment can be recovered / refunded later.
+      const pending = JSON.parse(localStorage.getItem('thothpay_pending') || '[]')
+      if (!pending.includes(txHash)) {
+        pending.push(txHash)
+        localStorage.setItem('thothpay_pending', JSON.stringify(pending))
+      }
 
       setProgressLog(prev => [...prev, `Payment sent. Waiting for confirmation… (${String(txHash).slice(0, 10)}…)`, 'Booting the agent…'])
 
@@ -138,6 +202,9 @@ export default function ResearchWorkspacePage() {
                 timestamp: new Date().toISOString(),
                 result: finalResult
               }, ...prev].slice(0, 20));
+              // Session completed → the payment was used; clear it from pending.
+              const pend = JSON.parse(localStorage.getItem('thothpay_pending') || '[]').filter((h: string) => h !== txHash)
+              localStorage.setItem('thothpay_pending', JSON.stringify(pend))
             } else if (data.type === 'error') {
               setError(data.payload)
             }
@@ -240,6 +307,30 @@ export default function ResearchWorkspacePage() {
               </div>
             ))}
           </div>
+        </div>
+      )}
+
+      {pendingPayments.length > 0 && (
+        <div className="mb-8 p-4 border border-[var(--color-amber)] text-[var(--color-ink)] bg-[var(--color-amber)]/10 font-mono text-sm rounded-[2px]">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+            <div className="flex-1">
+              <div className="font-bold text-[var(--color-amber)] mb-1">⚠ {pendingPayments.length} payment{ pendingPayments.length === 1 ? ' was' : 's were' } sent but didn&apos;t reach a session</div>
+              <div className="text-xs text-[var(--color-soft-ink)]">
+                This can happen if the connection dropped after your wallet approved the transfer. Your USDC is safe in the treasury and can be refunded.
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={handleRecover}
+              disabled={recovering}
+              className="btn btn-highlight whitespace-nowrap text-xs"
+            >
+              {recovering ? 'Recovering…' : 'Refund stranded payment'}
+            </button>
+          </div>
+          {recoveryMsg && (
+            <div className="mt-3 text-xs text-[var(--color-signal-green)]">{recoveryMsg}</div>
+          )}
         </div>
       )}
 

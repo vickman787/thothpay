@@ -332,14 +332,25 @@ export async function runResearchAgent(
     // Refunds below this are worth less than the gas to send them.
     const MIN_REFUND_USDC = 0.01
 
+    const recordRefund = async (type: 'refund_issued' | 'refund_failed', amount: number, refundTx?: string, reason?: string) => {
+      try {
+        await supabase.from('audit_events').insert({
+          event_type: type,
+          details: { sessionId, amount, payer: walletAddress, refundTx, reason },
+        })
+      } catch { /* audit best-effort */ }
+    }
+
     if (unspentBudget >= MIN_REFUND_USDC) {
       const amount = unspentBudget.toFixed(6)
       if (onProgress) onProgress(`Calculating budget... Unspent budget is $${amount}. Initiating refund...`)
       try {
-        await executeGatewayTransfer(walletAddress, amount);
+        const refundTx = await executeGatewayTransfer(walletAddress, amount);
+        await recordRefund('refund_issued', unspentBudget, refundTx)
         if (onProgress) onProgress(`Refunded $${amount} to your wallet.`)
       } catch (err: any) {
         console.error("Refund failed:", err);
+        await recordRefund('refund_failed', unspentBudget, undefined, err.message)
         if (onProgress) onProgress(`Warning: Refund transfer failed (${err.message})`)
       }
     } else if (unspentBudget > 0) {
